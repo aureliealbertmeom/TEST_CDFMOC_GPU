@@ -1,0 +1,1 @@
+2230389 : ERROR : Application sets its own handler for signal 38 that is used for internal needs of the tool. Collection cannot continue. Refer to the Troubleshooting section of the online help for possible workarounds. 
