@@ -11,8 +11,8 @@ It already has some OpenMP directives in it that we translated to GPU offloading
 
 We used the cray compilers and compiled the fortran code first without the openMP option (SERIAL) that we ran on a HPDA core , with OpenMP (CPU) that we ran on a whole HPDA node (128 cores) and with GPU offloading (GPU) that we ran on a whole MI250 node
 
-| TEST_CASE | RUN IN SERIAL | RUN ON CPU | RUN ON GPU |
-|----------|---------------|-------------|-----------|
-| eORCA05 | 49 sec | 55 sec | 80 sec |
-| eORCA025 | 91 sec | 94 sec | 161 sec |
-| eNATL60 | 74 min | 74 min | |
+| TEST_CASE | RUN IN SERIAL | RUN ON CPU (128cores)| RUN ON CPU (256 cores) | RUN ON GPU |
+|----------|---------------|-------------|-----------|---|
+| eORCA05 | 49 sec | 55 sec | | 80 sec |
+| eORCA025 | 91 sec | 94 sec | | 161 sec |
+| eNATL60 | 74 min | 74 min | 76 min | 294 min|
