@@ -58,11 +58,14 @@ MODULE eos
    INTEGER(KIND=4), PARAMETER :: wp=8
    ! constant
    REAL(KIND=8) :: r1_rau0, rau0, dlU
+   !$OMP DECLARE TARGET (r1_rau0, rau0, dlU)
    ! TEOS10/EOS80 parameters
    REAL(wp) ::   r1_S0, r1_T0, r1_Z0, rdeltaS
+   !$OMP DECLARE TARGET (r1_S0, r1_T0, r1_Z0, rdeltaS)
 
    ! REF peofile parameters
    REAL(wp) ::   R00, R01, R02, R03, R04, R05
+   !$OMP DECLARE TARGET (R00, R01, R02, R03, R04, R05)
    ! EOS parameters
    REAL(wp) ::   EOS000 , EOS100 , EOS200 , EOS300 , EOS400 , EOS500 , EOS600
    REAL(wp) ::   EOS010 , EOS110 , EOS210 , EOS310 , EOS410 , EOS510
@@ -81,6 +84,7 @@ MODULE eos
    REAL(wp) ::   EOS022
    REAL(wp) ::   EOS003 , EOS103
    REAL(wp) ::   EOS013
+   !$OMP DECLARE TARGET (EOS000 , EOS100 , EOS200 , EOS300 , EOS400 , EOS500 , EOS600, EOS010 , EOS110 , EOS210 , EOS310 , EOS410 ,EOS510, EOS020 , EOS120 , EOS220 , EOS320 , EOS420, EOS030 , EOS130 , EOS230 , EOS330, EOS040 , EOS140 , EOS240, EOS050 ,EOS150, EOS060, EOS001 , EOS101 , EOS201 , EOS301 , EOS401, EOS011 , EOS111 , EOS211 , EOS311, EOS021 , EOS121 , EOS221, EOS031, EOS131, EOS041, EOS002 , EOS102 , EOS202, EOS012 , EOS112, EOS022, EOS003 , EOS103, EOS013)
 
    ! ALPHA parameters
    REAL(wp) ::   ALP000 , ALP100 , ALP200 , ALP300 , ALP400 , ALP500
@@ -96,6 +100,7 @@ MODULE eos
    REAL(wp) ::   ALP002 , ALP102
    REAL(wp) ::   ALP012
    REAL(wp) ::   ALP003
+   !$OMP DECLARE TARGET (ALP000 , ALP100 , ALP200 , ALP300 , ALP400 , ALP500, ALP010 , ALP110 , ALP210 , ALP310 , ALP410, ALP020 ,ALP120 , ALP220 , ALP320, ALP030 , ALP130 , ALP230, ALP040 , ALP140, ALP050, ALP001 , ALP101 , ALP201 , ALP301, ALP011 , ALP111, ALP211, ALP021 , ALP121, ALP031, ALP002 , ALP102, ALP012, ALP003)
 
    ! BETA parameters
    REAL(wp) ::   BET000 , BET100 , BET200 , BET300 , BET400 , BET500
@@ -111,6 +116,7 @@ MODULE eos
    REAL(wp) ::   BET002 , BET102
    REAL(wp) ::   BET012
    REAL(wp) ::   BET003
+   !$OMP DECLARE TARGET (BET000 , BET100 , BET200 , BET300 , BET400 , BET500, BET010 , BET110 , BET210 , BET310 , BET410 ,BET020 ,BET120 , BET220 , BET320, BET030 , BET130 , BET230 BET040 , BET140, BET050, BET001 , BET101 , BET201 , BET301, BET011 , BET111 ,BET211, BET021 , BET121, BET031, BET002 , BET102, BET012, BET003) 
 
    ! PEN parameters
    REAL(wp) ::   PEN000 , PEN100 , PEN200 , PEN300 , PEN400
@@ -123,6 +129,7 @@ MODULE eos
    REAL(wp) ::   PEN021
    REAL(wp) ::   PEN002 , PEN102
    REAL(wp) ::   PEN012
+   !$OMP DECLARE TARGET (PEN000 , PEN100 , PEN200 , PEN300 , PEN400, PEN010 , PEN110 , PEN210 , PEN310, PEN020 , PEN120 , PEN220,PEN030 , PEN130, PEN040, PEN001 , PEN101 , PEN201, PEN011 , PEN111, PEN021, PEN002 , PEN102, PEN012)
 
    ! ALPHA_PEN parameters
    REAL(wp) ::   APE000 , APE100 , APE200 , APE300
@@ -132,6 +139,7 @@ MODULE eos
    REAL(wp) ::   APE001 , APE101
    REAL(wp) ::   APE011
    REAL(wp) ::   APE002
+   !$OMP DECLARE TARGET (APE000 , APE100 , APE200 , APE300, APE010 , APE110 , APE210, APE020 , APE120, APE030, APE001 , APE101,APE011, APE002)
 
    ! BETA_PEN parameters
    REAL(wp) ::   BPE000 , BPE100 , BPE200 , BPE300
@@ -141,58 +149,59 @@ MODULE eos
    REAL(wp) ::   BPE001 , BPE101
    REAL(wp) ::   BPE011
    REAL(wp) ::   BPE002
+   !$OMP DECLARE TARGET (BPE000 , BPE100 , BPE200 , BPE300, BPE010 , BPE110 , BPE210, BPE020 , BPE120, BPE030, BPE001 , BPE101,BPE011, BPE002)
 
    ! Spiciness-0 from GSW
 INTEGER(KIND=4), PARAMETER :: r8=8
-real (r8), parameter :: s01 = -9.22982898371678e1_r8
-real (r8), parameter :: s02 = -1.35727873628866e1_r8
-real (r8), parameter :: s03 =  1.87353650994010e1_r8
-real (r8), parameter :: s04 = -1.61360047373455e1_r8
-real (r8), parameter :: s05 =  3.76112762286425e1_r8
-real (r8), parameter :: s06 = -4.27086671461257e1_r8
-real (r8), parameter :: s07 =  2.00820111041594e1_r8
-real (r8), parameter :: s08 =  2.87969717584045e2_r8
-real (r8), parameter :: s09 =  1.13747111959674e1_r8
-real (r8), parameter :: s10 =  6.07377192990680e1_r8
-real (r8), parameter :: s11 = -7.37514033570187e1_r8
-real (r8), parameter :: s12 = -7.51171878953574e1_r8
-real (r8), parameter :: s13 =  1.63310989721504e2_r8
-real (r8), parameter :: s14 = -8.83222751638095e1_r8
-real (r8), parameter :: s15 = -6.41725302237048e2_r8
-real (r8), parameter :: s16 =  2.79732530789261e1_r8
-real (r8), parameter :: s17 = -2.49466901993728e2_r8
-real (r8), parameter :: s18 =  3.26691295035416e2_r8
-real (r8), parameter :: s19 =  2.66389243708181e1_r8
-real (r8), parameter :: s20 = -2.93170905757579e2_r8
-real (r8), parameter :: s21 =  1.76053907144524e2_r8
-real (r8), parameter :: s22 =  8.27634318120224e2_r8
-real (r8), parameter :: s23 = -7.02156220126926e1_r8
-real (r8), parameter :: s24 =  3.82973336590803e2_r8
-real (r8), parameter :: s25 = -5.06206828083959e2_r8
-real (r8), parameter :: s26 =  6.69626565169529e1_r8
-real (r8), parameter :: s27 =  3.02851235050766e2_r8
-real (r8), parameter :: s28 = -1.96345285604621e2_r8
-real (r8), parameter :: s29 = -5.74040806713526e2_r8
-real (r8), parameter :: s30 =  7.03285905478333e1_r8
-real (r8), parameter :: s31 = -2.97870298879716e2_r8
-real (r8), parameter :: s32 =  3.88340373735118e2_r8
-real (r8), parameter :: s33 = -8.29188936089122e1_r8
-real (r8), parameter :: s34 = -1.87602137195354e2_r8
-real (r8), parameter :: s35 =  1.27096944425793e2_r8
-real (r8), parameter :: s36 =  2.11671167892147e2_r8
-real (r8), parameter :: s37 = -3.15140919876285e1_r8
-real (r8), parameter :: s38 =  1.16458864953602e2_r8
-real (r8), parameter :: s39 = -1.50029730802344e2_r8
-real (r8), parameter :: s40 =  3.76293848660589e1_r8
-real (r8), parameter :: s41 =  6.47247424373200e1_r8
-real (r8), parameter :: s42 = -4.47159994408867e1_r8
-real (r8), parameter :: s43 = -3.23533339449055e1_r8
-real (r8), parameter :: s44 =  5.30648562097667_r8
-real (r8), parameter :: s45 = -1.82051249177948e1_r8
-real (r8), parameter :: s46 =  2.33184351090495e1_r8
-real (r8), parameter :: s47 = -6.22909903460368_r8
-real (r8), parameter :: s48 = -9.55975464301446_r8
-real (r8), parameter :: s49 =  6.61877073960113_r8
+real (r8),  parameter :: s01 = -9.22982898371678e1_r8
+real (r8),  parameter :: s02 = -1.35727873628866e1_r8
+real (r8),  parameter :: s03 =  1.87353650994010e1_r8
+real (r8),  parameter :: s04 = -1.61360047373455e1_r8
+real (r8),  parameter :: s05 =  3.76112762286425e1_r8
+real (r8),  parameter :: s06 = -4.27086671461257e1_r8
+real (r8),  parameter :: s07 =  2.00820111041594e1_r8
+real (r8),  parameter :: s08 =  2.87969717584045e2_r8
+real (r8),  parameter :: s09 =  1.13747111959674e1_r8
+real (r8),  parameter :: s10 =  6.07377192990680e1_r8
+real (r8),  parameter :: s11 = -7.37514033570187e1_r8
+real (r8),  parameter :: s12 = -7.51171878953574e1_r8
+real (r8),  parameter :: s13 =  1.63310989721504e2_r8
+real (r8),  parameter :: s14 = -8.83222751638095e1_r8
+real (r8),  parameter :: s15 = -6.41725302237048e2_r8
+real (r8),  parameter :: s16 =  2.79732530789261e1_r8
+real (r8),  parameter :: s17 = -2.49466901993728e2_r8
+real (r8),  parameter :: s18 =  3.26691295035416e2_r8
+real (r8),  parameter :: s19 =  2.66389243708181e1_r8
+real (r8),  parameter :: s20 = -2.93170905757579e2_r8
+real (r8),  parameter :: s21 =  1.76053907144524e2_r8
+real (r8),  parameter :: s22 =  8.27634318120224e2_r8
+real (r8),  parameter :: s23 = -7.02156220126926e1_r8
+real (r8),  parameter :: s24 =  3.82973336590803e2_r8
+real (r8),  parameter :: s25 = -5.06206828083959e2_r8
+real (r8),  parameter :: s26 =  6.69626565169529e1_r8
+real (r8),  parameter :: s27 =  3.02851235050766e2_r8
+real (r8),  parameter :: s28 = -1.96345285604621e2_r8
+real (r8),  parameter :: s29 = -5.74040806713526e2_r8
+real (r8),  parameter :: s30 =  7.03285905478333e1_r8
+real (r8),  parameter :: s31 = -2.97870298879716e2_r8
+real (r8),  parameter :: s32 =  3.88340373735118e2_r8
+real (r8),  parameter :: s33 = -8.29188936089122e1_r8
+real (r8),  parameter :: s34 = -1.87602137195354e2_r8
+real (r8),  parameter :: s35 =  1.27096944425793e2_r8
+real (r8),  parameter :: s36 =  2.11671167892147e2_r8
+real (r8),  parameter :: s37 = -3.15140919876285e1_r8
+real (r8),  parameter :: s38 =  1.16458864953602e2_r8
+real (r8),  parameter :: s39 = -1.50029730802344e2_r8
+real (r8),  parameter :: s40 =  3.76293848660589e1_r8
+real (r8),  parameter :: s41 =  6.47247424373200e1_r8
+real (r8),  parameter :: s42 = -4.47159994408867e1_r8
+real (r8),  parameter :: s43 = -3.23533339449055e1_r8
+real (r8),  parameter :: s44 =  5.30648562097667_r8
+real (r8),  parameter :: s45 = -1.82051249177948e1_r8
+real (r8),  parameter :: s46 =  2.33184351090495e1_r8
+real (r8),  parameter :: s47 = -6.22909903460368_r8
+real (r8),  parameter :: s48 = -9.55975464301446_r8
+real (r8),  parameter :: s49 =  6.61877073960113_r8
 
 
   !!----------------------------------------------------------------------

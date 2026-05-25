@@ -1,17 +1,17 @@
 #!/bin/bash
 
 CASE=eNATL60 #eORCA025 #eNATL60 #eORCA025
-METHOD=CPU_CRAY #SERIAL_CRAY
+METHOD=GPU_CRAY #SERIAL_CRAY
 
 case $METHOD in 
 	SERIAL_CRAY) NB_TASK=1; QUEUE=HPDA;;
 	CPU_CRAY) NB_TASK=128; QUEUE=HPDA;;
-	OPENMP_GPU)  QUEUE=MI250;;
+	GPU_CRAY)  QUEUE=MI250;;
 esac
 
 case $METHOD in
 	SERIAL_CRAY|CPU_CRAY) cp job_HPDA_serial.ksh job_${CASE}-${METHOD}.ksh; sed -i "s/NTASKS/${NB_TASK}/g" job_${CASE}-${METHOD}.ksh;;
-	OPENMP_GPU) cp job_MI250.ksh job_${CASE}-${METHOD}.ksh;;
+	GPU_CRAY) cp job_MI250.ksh job_${CASE}-${METHOD}.ksh;;
 esac
 
 sed -i "s/JOBNAME/${CASE}_${METHOD}/g" job_${CASE}-${METHOD}.ksh
