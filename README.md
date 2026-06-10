@@ -24,5 +24,5 @@ cdfmoc decomposition (calls sigmai from eos and needs extra T files) :
 | TEST_CASE | RUN IN SERIAL | RUN ON CPU (128cores)| RUN ON CPU (256 cores) | RUN ON GPU |
 |----------|---------------|-------------|-----------|---|
 | eORCA05 | 210 sec | 224 sec | | 249 sec |
-| eORCA025 |  | | |  |
+| eORCA025 | 524 sec | 576 sec | | 666 sec |
 | eNATL60 | |  |  | |
