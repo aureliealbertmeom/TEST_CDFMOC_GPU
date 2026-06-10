@@ -11,8 +11,18 @@ It already has some OpenMP directives in it that we translated to GPU offloading
 
 We used the cray compilers and compiled the fortran code first without the openMP option (SERIAL) that we ran on a HPDA core , with OpenMP (CPU) that we ran on a whole HPDA node (128 cores) and with GPU offloading (GPU) that we ran on a whole MI250 node
 
+cdfmoc total :
+
 | TEST_CASE | RUN IN SERIAL | RUN ON CPU (128cores)| RUN ON CPU (256 cores) | RUN ON GPU |
 |----------|---------------|-------------|-----------|---|
 | eORCA05 | 49 sec | 55 sec | | 80 sec |
 | eORCA025 | 91 sec | 94 sec | | 161 sec |
 | eNATL60 | 74 min | 74 min | 76 min | 294 min|
+
+cdfmoc decomposition (calls sigmai from eos and needs extra T files) :
+
+| TEST_CASE | RUN IN SERIAL | RUN ON CPU (128cores)| RUN ON CPU (256 cores) | RUN ON GPU |
+|----------|---------------|-------------|-----------|---|
+| eORCA05 | 210 sec | 224 sec | | 249 sec |
+| eORCA025 |  | | |  |
+| eNATL60 | |  |  | |
