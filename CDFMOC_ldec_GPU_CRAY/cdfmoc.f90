@@ -46,8 +46,8 @@ PROGRAM cdfmoc
   !!----------------------------------------------------------------------
   IMPLICIT NONE
 
-  INTEGER(KIND=4), DIMENSION(:,:,:), ALLOCATABLE :: ibmask       !  nbasins x npiglo x npjglo
-  INTEGER(KIND=4), DIMENSION(:,:), ALLOCATABLE :: ivmask         ! ivmask (used to mask e3v)
+  INTEGER(KIND=2), DIMENSION(:,:,:), ALLOCATABLE :: ibmask       !  nbasins x npiglo x npjglo
+  INTEGER(KIND=2), DIMENSION(:,:), ALLOCATABLE :: ivmask         ! ivmask (used to mask e3v)
   INTEGER(KIND=4)                             :: npglo, npatl, npinp, npinp0
   INTEGER(KIND=4)                             :: npind, nppac
   INTEGER(KIND=4)                             :: jbasin, jj, jk  ! dummy loop index
@@ -308,6 +308,7 @@ PROGRAM cdfmoc
   gdepw(:)   = getvare3(cn_fzgr, cn_gdepw, npk             )
   gdepw(:)   = -1.* gdepw(:)
 
+
   IF ( ldec  ) gdept(:) = getvare3(cn_fzgr, cn_gdept, npk             )
   IF ( ldec  ) e1u(:,:) = getvar  (cn_fhgr, cn_ve1u,  1, npiglo,npjglo)
   IF ( lfull ) e31d(:)  = getvare3(cn_fzgr, cn_ve3t1d, npk)
@@ -319,8 +320,6 @@ PROGRAM cdfmoc
   ALLOCATE ( stypvar(nvarout), ipk(nvarout), id_varout(nvarout) )
 
   CALL CreateOutput
-
-  PRINT *, 'Output created'
 
   ! 1 : global ; 2 : Atlantic ; 3 : Indo-Pacif ; 4 : Indian ; 5 : Pacif
   ibmask(npglo,:,:) = getvar(cn_fmsk,   cn_vmask, 1, npiglo, npjglo)
@@ -356,6 +355,7 @@ PROGRAM cdfmoc
      DO jk = 1, npk-1
         ! Get velocities v at jk, time = jt
         zv(:,:)= getvar(cf_vfil, cn_vomecrty,  jk, npiglo, npjglo, ktime=jt)
+        !          print *, jk, MAXVAL(zv)
 
         IF ( ldec ) THEN
            ! compute barotropic component when requested
@@ -366,7 +366,7 @@ PROGRAM cdfmoc
 
         ! integrates 'zonally' (along i-coordinate)
         DO jbasin = 1, nbasins
-           !$OMP PARALLEL DO SCHEDULE(RUNTIME)
+           !$OMP TARGET TEAMS DISTRIBUTE PARALLEL DO SCHEDULE(RUNTIME) MAP(tofrom: dmoc) MAP(to: e1v, e3v, ibmask, zv)
            DO jj=1,npjglo
               DO ji=1,npiglo
                  ! For all basins 
@@ -374,19 +374,147 @@ PROGRAM cdfmoc
                       &             e1v(ji,jj)*e3v(ji,jj,jk)* ibmask(jbasin,ji,jj)*zv(ji,jj)*1.d0
               ENDDO
            END DO
-           !$OMP END PARALLEL DO
+           !$OMP END TARGET TEAMS DISTRIBUTE PARALLEL DO
         END DO
      END DO
-     
-     
+
      ! integrates vertically from bottom to surface
-     !$OMP PARALLEL DO SCHEDULE(RUNTIME)
+     !$OMP TARGET TEAMS DISTRIBUTE PARALLEL DO SCHEDULE(RUNTIME) MAP(tofrom: dmoc)
      DO jj = 1, npjglo
         DO jk = npk-1, 1, -1
            dmoc(:,jj,jk)    = dmoc(:,jj,jk+1)    + dmoc(:,jj,jk)/1.d6
         END DO
      ENDDO
-     !$OMP END PARALLEL DO
+     !$OMP END TARGET TEAMS DISTRIBUTE PARALLEL DO
+
+     IF ( ldec ) THEN
+        !--------------------------------------------------
+        ! 2) compute extra term if decomposition requested
+        !--------------------------------------------------
+        !  2.1 : Barotropic MOC : dmoc_bt
+        !  """"""""""""""""""""
+        ! compute vertical mean of the meridional velocity
+        WHERE ( hdep /= 0 )
+           dvbt(:,:) = dvbt(:,:) / hdep(:,:)
+        ELSEWHERE
+           dvbt(:,:) = 0.d0
+        ENDWHERE
+
+        DO jk=1, npk-1
+
+           ! integrates 'zonally' (along i-coordinate)
+           DO ji=1,npiglo
+              ! For all basins
+              DO jbasin = 1, nbasins
+                 DO jj=1,npjglo
+                    dmoc_bt(jbasin,jj,jk)=dmoc_bt(jbasin,jj,jk) -  &
+                         &    e1v(ji,jj)*e3v(ji,jj,jk)* ibmask(jbasin,ji,jj)*dvbt(ji,jj)
+                 ENDDO
+              END DO
+           END DO
+        END DO
+        ! integrates vertically   from bottom to surface
+        DO jk = npk-1, 1, -1
+           dmoc_bt(:,:,jk) = dmoc_bt(:,:,jk+1) + dmoc_bt(:,:,jk)/1.d6
+        END DO
+
+        !  2.2 : Geostrophic Shear MOC : dmoc_sh
+        !  """""""""""""""""""""""""""""
+        ! using equation 2.7 of Lecointre (2008 
+        ! f. Dv/Dz = -g/rau0. Drho/Dx 
+        rau0 = 1025.0
+        grav = 9.81
+        rpi  = ACOS( -1.)
+        zcoef(:,:) =  2*2*rpi/( 24.0 * 3600. )* SIN ( rpi * gphiv(:,:) /180.0) ! f at v point
+        WHERE ( zcoef /= 0 ) 
+           zcoef(:,:) = -grav/ rau0 / zcoef(:,:)
+        ELSEWHERE
+           zcoef(:,:) = 0.
+        END WHERE
+
+        dvgeo(:,:,:) = 0.0
+        dvbt(:,:)    = 0.d0
+        iup = 1 ; ido = 2
+        DO jk=npk-1, 1, -1
+           iumask(:,:) = getvar(cn_fmsk, cn_umask, jk, npiglo, npjglo)
+           itmask(:,:) = getvar(cn_fmsk, cn_tmask, jk, npiglo, npjglo)
+           ztemp(:,:)  = getvar(cf_tfil, cn_votemper, jk, npiglo, npjglo, ktime=jt )
+           zsal(:,:)   = getvar(cf_sfil, cn_vosaline, jk, npiglo, npjglo, ktime=jt )
+           zsig0(:,:)  = sigmai (ztemp, zsal, gdept(jk), npiglo, npjglo )* itmask(:,:)
+
+           ! dgeo is Drho/dx at V point ( average on the 4 neighbours U points)
+           ! thus, dgeo is -f.rau0/g. Dv/Dz 
+           DO jj = 2, npjglo -1
+              DO ji = 2, npiglo -1
+                 zmsv =  1. / MAX (1_2, iumask(ji-1,jj+1)+iumask(ji,jj+1)+iumask(ji-1,jj)+iumask(ji,jj) )
+                 dgeo = ( ( zsig0(ji,  jj+1) - zsig0(ji-1,jj+1) ) * iumask(ji-1, jj+1) / e1u(ji-1, jj+1) &
+                      &  +( zsig0(ji+1,jj+1) - zsig0(ji  ,jj+1) ) * iumask(ji,   jj+1) / e1u(ji,   jj+1) &
+                      &  +( zsig0(ji,  jj  ) - zsig0(ji-1,jj  ) ) * iumask(ji-1, jj  ) / e1u(ji-1, jj  ) &
+                      &  +( zsig0(ji+1,jj  ) - zsig0(ji,  jj  ) ) * iumask(ji,   jj  ) / e1u(ji,   jj  )  )*1.d0
+                 ! 
+                 ! dvgeo is the geostrophic velocity at w point(jk) obtained by vertical integration of Dv/Dz
+                 ! between bottom and jk
+                 dvgeo(ji,jj,iup) = dvgeo(ji,jj,ido) + zcoef(ji,jj) * dgeo * zmsv * ibmask(npglo,ji,jj) *e3v(ji,jj,jk)
+                 ! zv is the geostrophic velocity located at v-level (jk)
+                 zv(ji,jj) = 0.5 *( dvgeo(ji,jj,iup) + dvgeo(ji,jj,ido) )
+              ENDDO
+           ENDDO
+           ! compute the vertical mean of geostrophic velocity
+           ! for memory management purpose we re-use dvbt which is not used any longer.
+           dvbt(:,:) = dvbt(:,:) + e3v(:,:,jk)*zv(:,:)*1.d0
+
+           ! integrates 'zonally' (along i-coordinate)
+           DO ji=1,npiglo
+              ! For all basins
+              DO jbasin = 1, nbasins
+                 DO jj=1,npjglo
+                    dmoc_sh(jbasin,jj,jk)=dmoc_sh(jbasin,jj,jk) -  &
+                         &             e1v(ji,jj)*e3v(ji,jj,jk)* ibmask(jbasin,ji,jj)*zv(ji,jj)*1.d0
+                 ENDDO
+              END DO
+           END DO
+           ! swap up and down for next level computation
+           itmp=iup ;  iup = ido ; ido = itmp
+        ENDDO   ! end of level loop
+
+        WHERE ( hdep /=0 )
+           dvbt(:,:) = dvbt(:,:) / hdep(:,:)
+        ELSEWHERE
+           dvbt(:,:) = 0.d0
+        END WHERE
+
+        !  2.2.1 : Barotropic Geostrophic Shear MOC : dmoc_btw
+        !  """"""""""""""""""""""""""""""""""""""""""
+        ! compute corresponding MOC for this unwanted pseudo barotropic contribution
+        dmoc_btw(:,:,:) = 0.d0
+        DO jk=1, npk-1
+
+           ! integrates 'zonally' (along i-coordinate)
+           DO ji=1,npiglo
+              ! For all basins
+              DO jbasin = 1, nbasins
+                 DO jj=1,npjglo
+                    dmoc_btw(jbasin,jj,jk)=dmoc_btw(jbasin,jj,jk) -  &
+                         &         e1v(ji,jj)*e3v(ji,jj,jk)* ibmask(jbasin,ji,jj)*dvbt(ji,jj)
+                 ENDDO
+              END DO
+           END DO
+        END DO
+
+        ! apply correction to dmoc_sh
+        dmoc_sh(:,:,:) = dmoc_sh(:,:,:) - dmoc_btw(:,:,:)
+
+        ! integrates vertically   from bottom to surface
+        DO jk = npk-1, 1, -1
+           dmoc_sh(:,:,jk) = dmoc_sh(:,:,jk+1) + dmoc_sh(:,:,jk)/1.e6
+        END DO  ! 
+
+        !  2.3 : Barotropic Geostrophic Shear MOC : dmoc_ag
+        ! ----------------------------------------
+        ! compute ageostrophic component 
+        !  AGEO        =   MOC total    Geo-Shear        Barotropic
+        dmoc_ag(:,:,:) = dmoc(:,:,:) - dmoc_sh(:,:,:) - dmoc_bt(:,:,:)
+     ENDIF
 
      ! netcdf output
      ijvar=1
@@ -396,6 +524,23 @@ PROGRAM cdfmoc
         END DO
         ijvar = ijvar + 1
 
+        IF ( ldec ) THEN
+           !           print *, dmoc_sh(jbasin,60,10)
+           DO jk = 1, npk 
+              ierr = putvar (ncout, id_varout(ijvar), REAL(dmoc_sh(jbasin,:,jk)), jk, 1, npjglo, ktime=jt)
+           END DO
+           !           print *, dmoc_bt(jbasin,60,10)
+           ijvar = ijvar + 1 
+           DO jk = 1, npk 
+              ierr = putvar (ncout, id_varout(ijvar), REAL(dmoc_bt(jbasin,:,jk)), jk, 1, npjglo, ktime=jt)
+           END DO
+           !           print *, dmoc_ag(jbasin,60,10)
+           ijvar = ijvar + 1 
+           DO jk = 1, npk 
+              ierr = putvar (ncout, id_varout(ijvar), REAL(dmoc_ag(jbasin,:,jk)), jk, 1, npjglo, ktime=jt)
+           END DO
+           ijvar = ijvar + 1 
+        ENDIF
      END DO
 
      IF ( lbas ) THEN
@@ -404,6 +549,23 @@ PROGRAM cdfmoc
            ierr = putvar (ncout, id_varout(ijvar), REAL(dmoc(npglo,:,jk)-dmoc(npatl,:,jk)), jk, 1, npjglo, ktime=jt)
         END DO
         ijvar = ijvar + 1
+        IF ( ldec ) THEN
+
+           DO jk = 1, npk 
+              ierr = putvar (ncout, id_varout(ijvar), REAL(dmoc_sh(npglo,:,jk)-dmoc_sh(npatl,:,jk)), jk, 1, npjglo, ktime=jt)
+           END DO
+
+           ijvar = ijvar + 1 
+           DO jk = 1, npk 
+              ierr = putvar (ncout, id_varout(ijvar), REAL(dmoc_bt(npglo,:,jk)-dmoc_bt(npatl,:,jk)), jk, 1, npjglo, ktime=jt)
+           END DO
+
+           ijvar = ijvar + 1 
+           DO jk = 1, npk 
+              ierr = putvar (ncout, id_varout(ijvar), REAL(dmoc_ag(npglo,:,jk)-dmoc_ag(npatl,:,jk)), jk, 1, npjglo, ktime=jt)
+           END DO
+           ijvar = ijvar + 1 
+        ENDIF
      ENDIF
   ENDDO  ! time loop
 
@@ -424,8 +586,8 @@ CONTAINS
     INTEGER(KIND=4), INTENT(in)  :: kk  ! level to work with
     INTEGER(KIND=4), INTENT(in)  :: kt  ! time for reading e3v (vvl case)
     REAL(KIND=4), DIMENSION(npiglo,npjglo) :: get_e3v
-     
-    ivmask(:,:) = getvar(cn_fmsk, cn_vmask, jk, npiglo, npjglo, ktime=1)
+
+    ivmask(:,:) = getvar(cn_fmsk, cn_vmask, jk, npiglo, npjglo)
     IF ( lfull ) THEN ; get_e3v(:,:) = e31d(jk)
     ELSE              ; get_e3v(:,:) = getvar(cn_fe3v, cn_ve3v, jk, npiglo, npjglo, ktime=kt, ldiom=.NOT.lg_vvl )
     ENDIF
@@ -491,6 +653,10 @@ CONTAINS
     CHARACTER(LEN=1), DIMENSION (3)  :: cvarname
     !!----------------------------------------------------------------------
     npk    = getdim (cf_vfil,cn_z)
+    PRINT*, 'cf_vfil = ', TRIM(cf_vfil)
+    PRINT*, 'cf_tfil = ', TRIM(cf_tfil)
+    PRINT*, 'cf_sfil = ', TRIM(cf_sfil)
+    PRINT*, 'cf_ufil = ', TRIM(cf_ufil)
     npt    = getdim (cf_vfil,cn_t)
     ! 1) look for integer indices corresponding to the section characteristics
     CALL cdf_findij ( rp_lonw_rapid,  rp_lone_rapid, rp_lat_rapid, rp_lat_rapid, &
@@ -575,6 +741,10 @@ CONTAINS
        dtaux(:,1)  = dtaux (:,1) * itmaskrapid(:,1)    !    APPROXIMATIF !!
        trapid(:,:) = trapid(:,:) * itmaskrapid(:,:)    ! 
        srapid(:,:) = srapid(:,:) * itmaskrapid(:,:)    ! 
+       PRINT*, 'max vrapid  ',MAXVAL(vrapid)
+       PRINT*, 'max trapid  ',MAXVAL(trapid)
+       PRINT*, 'max srapid  ',MAXVAL(srapid)
+       PRINT*, 'max dtaux   ',MAXVAL(ABS(dtaux))
 
        ! 2) compute the amoc at 26.5 N, traditional way ( from top to bottom as in MOCHA)
        damocrapid(:,:,1) = 0.d0
@@ -865,6 +1035,23 @@ CONTAINS
     stypvar(ii)%cshort_name    = TRIM(cn_zomsfglo)
     ii=ii+1
 
+    IF ( ldec ) THEN
+       PRINT *, 'Variable ',ii,' is zomsfglo_sh'
+       stypvar(ii)%cname       = TRIM(cn_zomsfglo)//'_sh'
+       stypvar(ii)%clong_name  = 'GeoShear_Merid_StreamFunction'
+       stypvar(ii)%cshort_name = TRIM(cn_zomsfglo)//'_sh'
+       ii= ii+1
+       PRINT *, 'Variable ',ii,' is zomsfglo_bt'
+       stypvar(ii)%cname       = TRIM(cn_zomsfglo)//'_bt'
+       stypvar(ii)%clong_name  = 'Barotropic_Merid_StreamFunction'
+       stypvar(ii)%cshort_name = TRIM(cn_zomsfglo)//'_bt'
+       ii= ii+1
+       PRINT *, 'Variable ',ii,' is zomsfglo_ag'
+       stypvar(ii)%cname       = TRIM(cn_zomsfglo)//'_ag'
+       stypvar(ii)%clong_name  = 'Ageostoph_Merid_StreamFunction'
+       stypvar(ii)%cshort_name = TRIM(cn_zomsfglo)//'_ag'
+       ii= ii+1
+    ENDIF
 
     IF (lbas) THEN
        npatl=ibasin  ; ibasin = ibasin + 1
@@ -873,6 +1060,23 @@ CONTAINS
        stypvar(ii)%clong_name  = 'Meridional_Overt.Cell_Atlantic'
        stypvar(ii)%cshort_name = TRIM(cn_zomsfatl)
        ii= ii+1
+       IF ( ldec ) THEN 
+          PRINT *, 'Variable ',ii,' is zomsfatl_sh'
+          stypvar(ii)%cname       = TRIM(cn_zomsfatl)//'_sh'
+          stypvar(ii)%clong_name  = 'GeoShear_Merid_StreamFunction_Atlantic'
+          stypvar(ii)%cshort_name = TRIM(cn_zomsfatl)//'_sh'
+          ii= ii+1
+          PRINT *, 'Variable ',ii,' is zomsfatl_bt'
+          stypvar(ii)%cname       = TRIM(cn_zomsfatl)//'_bt'
+          stypvar(ii)%clong_name  = 'Barotropic_Merid_StreamFunction_Atlantic'
+          stypvar(ii)%cshort_name = TRIM(cn_zomsfatl)//'_bt'
+          ii= ii+1
+          PRINT *, 'Variable ',ii,' is zomsfatl_ag'
+          stypvar(ii)%cname       = TRIM(cn_zomsfatl)//'_ag'
+          stypvar(ii)%clong_name  = 'Ageostroph_Merid_StreamFunction_Atlantic'
+          stypvar(ii)%cshort_name = TRIM(cn_zomsfatl)//'_ag'
+          ii= ii+1
+       ENDIF
 
        npinp=ibasin  ; ibasin = ibasin + 1
        PRINT *, 'Variable ',ii,' is zomsfinp'
@@ -881,6 +1085,23 @@ CONTAINS
        stypvar(ii)%cshort_name = TRIM(cn_zomsfinp)
        ii= ii+1
 
+       IF ( ldec ) THEN
+          PRINT *, 'Variable ',ii,' is zomsfinp_sh'
+          stypvar(ii)%cname       = TRIM(cn_zomsfinp)//'_sh'
+          stypvar(ii)%clong_name  = 'GeoShear_Merid_StreamFunction_IndoPacif'
+          stypvar(ii)%cshort_name = TRIM(cn_zomsfinp)//'_sh'
+          ii= ii+1
+          PRINT *, 'Variable ',ii,' is zomsfinp_bt'
+          stypvar(ii)%cname       = TRIM(cn_zomsfinp)//'_bt'
+          stypvar(ii)%clong_name  = 'Barotropic_Merid_StreamFunction_IndoPacif'
+          stypvar(ii)%cshort_name = TRIM(cn_zomsfinp)//'_bt'
+          ii= ii+1
+          PRINT *, 'Variable ',ii,' is zomsfinp_ag'
+          stypvar(ii)%cname       = TRIM(cn_zomsfinp)//'_ag'
+          stypvar(ii)%clong_name  = 'Ageostroph_Merid_StreamFunction_IndoPacif'
+          stypvar(ii)%cshort_name = TRIM(cn_zomsfinp)//'_ag'
+          ii= ii+1
+       ENDIF
 
        npind=ibasin  ; ibasin = ibasin + 1
        PRINT *, 'Variable ',ii,' is zomsfind'
@@ -889,6 +1110,23 @@ CONTAINS
        stypvar(ii)%cshort_name = TRIM(cn_zomsfind)
        ii= ii+1
 
+       IF ( ldec ) THEN
+          PRINT *, 'Variable ',ii,' is zomsfind_sh'
+          stypvar(ii)%cname       = TRIM(cn_zomsfind)//'_sh'
+          stypvar(ii)%clong_name  = 'GeoShear_Merid_StreamFunction_Indian'
+          stypvar(ii)%cshort_name = TRIM(cn_zomsfind)//'_sh'
+          ii= ii+1
+          PRINT *, 'Variable ',ii,' is zomsfind_bt'
+          stypvar(ii)%cname       = TRIM(cn_zomsfind)//'_bt'
+          stypvar(ii)%clong_name  = 'Barotropic_Merid_StreamFunction_Indian'
+          stypvar(ii)%cshort_name = TRIM(cn_zomsfind)//'_bt'
+          ii= ii+1
+          PRINT *, 'Variable ',ii,' is zomsfind_ag'
+          stypvar(ii)%cname       = TRIM(cn_zomsfind)//'_ag'
+          stypvar(ii)%clong_name  = 'Ageostroph_Merid_StreamFunction_Indian'
+          stypvar(ii)%cshort_name = TRIM(cn_zomsfind)//'_ag'
+          ii= ii+1
+       ENDIF
 
        nppac=ibasin  ; ibasin = ibasin + 1
        PRINT *, 'Variable ',ii,' is zomsfpac'
@@ -897,6 +1135,23 @@ CONTAINS
        stypvar(ii)%cshort_name = TRIM(cn_zomsfpac)
        ii= ii+1
 
+       IF ( ldec ) THEN
+          PRINT *, 'Variable ',ii,' is zomsfpac_sh'
+          stypvar(ii)%cname       = TRIM(cn_zomsfpac)//'_sh'
+          stypvar(ii)%clong_name  = 'GeoShear_Merid_StreamFunction_Pacif'
+          stypvar(ii)%cshort_name = TRIM(cn_zomsfpac)//'_sh'
+          ii= ii+1
+          PRINT *, 'Variable ',ii,' is zomsfpac_bt'
+          stypvar(ii)%cname       = TRIM(cn_zomsfpac)//'_bt'
+          stypvar(ii)%clong_name  = 'Barotropic_Merid_StreamFunction_Pacif'
+          stypvar(ii)%cshort_name = TRIM(cn_zomsfpac)//'_bt'
+          ii= ii+1
+          PRINT *, 'Variable ',ii,' is zomsfpac_ag'
+          stypvar(ii)%cname       = TRIM(cn_zomsfpac)//'_ag'
+          stypvar(ii)%clong_name  = 'Ageostroph_Merid_StreamFunction_Pacif'
+          stypvar(ii)%cshort_name = TRIM(cn_zomsfpac)//'_ag'
+          ii=ii+1
+       ENDIF
 
        npinp0=ibasin  ; ibasin = ibasin + 1
        PRINT *, 'Variable ',ii,' is zomsfinp0'
@@ -905,6 +1160,22 @@ CONTAINS
        stypvar(ii)%cshort_name = TRIM(cn_zomsfinp0)
        ii= ii+1
 
+       IF ( ldec ) THEN
+          PRINT *, 'Variable ',ii,' is zomsfinp0_sh'
+          stypvar(ii)%cname       = TRIM(cn_zomsfinp0)//'_sh'
+          stypvar(ii)%clong_name  = 'GeoShear_Merid_StreamFunction_IndPac0'
+          stypvar(ii)%cshort_name = TRIM(cn_zomsfinp0)//'_sh'
+          ii= ii+1
+          PRINT *, 'Variable ',ii,' is zomsfinp0_bt'
+          stypvar(ii)%cname       = TRIM(cn_zomsfinp0)//'_bt'
+          stypvar(ii)%clong_name  = 'Barotropic_Merid_StreamFunction_IndPac0'
+          stypvar(ii)%cshort_name = TRIM(cn_zomsfinp0)//'_bt'
+          ii= ii+1
+          PRINT *, 'Variable ',ii,' is zomsfinp0_ag'
+          stypvar(ii)%cname       = TRIM(cn_zomsfinp0)//'_ag'
+          stypvar(ii)%clong_name  = 'Ageostroph_Merid_StreamFunction_IndPac0'
+          stypvar(ii)%cshort_name = TRIM(cn_zomsfinp0)//'_ag'
+       ENDIF
     ENDIF
 
     ! create output fileset

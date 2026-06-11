@@ -15,9 +15,10 @@ load_cray
 cd /lus/work/CT1/hmg2840/aalbert/TEST_CDFMOC_GPU/RUN_2026/eORCA025_SERIAL_CRAY
 
 ln -sf /lus/work/CT1/hmg2840/aalbert/TEST_CDFMOC_GPU/TEST_CASES/eORCA025.L75/eORCA025.L75-IMHOTEP.S_y2018m12_1d_gridV.nc u.nc
+ln -sf /lus/work/CT1/hmg2840/aalbert/TEST_CDFMOC_GPU/TEST_CASES/eORCA025.L75/eORCA025.L75-IMHOTEP.S_y2018m12_1d_gridT.nc t.nc
 ln -sf /lus/work/CT1/hmg2840/aalbert/TEST_CDFMOC_GPU/TEST_CASES/eORCA025.L75/mask.nc mask.nc
 ln -sf /lus/work/CT1/hmg2840/aalbert/TEST_CDFMOC_GPU/TEST_CASES/eORCA025.L75/mesh_hgr.nc mesh_hgr.nc
 ln -sf /lus/work/CT1/hmg2840/aalbert/TEST_CDFMOC_GPU/TEST_CASES/eORCA025.L75/mesh_zgr.nc mesh_zgr.nc
 
 
-/lus/work/CT1/hmg2840/aalbert/TEST_CDFMOC_GPU/CDFMOC_SERIAL_CRAY/cdfmoc -v u.nc
+/lus/work/CT1/hmg2840/aalbert/TEST_CDFMOC_GPU/CDFMOC_ldec_SERIAL_CRAY/cdfmoc -v u.nc -decomp -t t.nc

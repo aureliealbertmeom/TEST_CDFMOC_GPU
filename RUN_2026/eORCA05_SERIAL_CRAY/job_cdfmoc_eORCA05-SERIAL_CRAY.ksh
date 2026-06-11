@@ -8,7 +8,6 @@
 #SBATCH -o CDFMOC_eORCA05_SERIAL_CRAY.o%j
 #SBATCH --time=2:00:00
 #SBATCH --constraint=HPDA
-#SBATCH --exclusive
 
 source ~/.bashrc
 load_cray

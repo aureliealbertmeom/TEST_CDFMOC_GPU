@@ -308,6 +308,7 @@ PROGRAM cdfmoc
   gdepw(:)   = getvare3(cn_fzgr, cn_gdepw, npk             )
   gdepw(:)   = -1.* gdepw(:)
 
+
   IF ( ldec  ) gdept(:) = getvare3(cn_fzgr, cn_gdept, npk             )
   IF ( ldec  ) e1u(:,:) = getvar  (cn_fhgr, cn_ve1u,  1, npiglo,npjglo)
   IF ( lfull ) e31d(:)  = getvare3(cn_fzgr, cn_ve3t1d, npk)
@@ -336,6 +337,7 @@ PROGRAM cdfmoc
   ibmask(1,1,     :) = 0.
   ibmask(1,npiglo,:) = 0.
      
+ !$OMP PARALLEL DO SCHEDULE(RUNTIME)
   DO jt = 1, npt
      IF ( lg_vvl ) THEN  ; it=jt
      ELSE                ; it=1
@@ -366,7 +368,6 @@ PROGRAM cdfmoc
 
         ! integrates 'zonally' (along i-coordinate)
         DO jbasin = 1, nbasins
-           !$OMP PARALLEL DO SCHEDULE(RUNTIME)
            DO jj=1,npjglo
               DO ji=1,npiglo
                  ! For all basins 
@@ -374,19 +375,16 @@ PROGRAM cdfmoc
                       &             e1v(ji,jj)*e3v(ji,jj,jk)* ibmask(jbasin,ji,jj)*zv(ji,jj)*1.d0
               ENDDO
            END DO
-           !$OMP END PARALLEL DO
         END DO
      END DO
      
      
      ! integrates vertically from bottom to surface
-     !$OMP PARALLEL DO SCHEDULE(RUNTIME)
      DO jj = 1, npjglo
         DO jk = npk-1, 1, -1
            dmoc(:,jj,jk)    = dmoc(:,jj,jk+1)    + dmoc(:,jj,jk)/1.d6
         END DO
      ENDDO
-     !$OMP END PARALLEL DO
 
      ! netcdf output
      ijvar=1
@@ -406,6 +404,7 @@ PROGRAM cdfmoc
         ijvar = ijvar + 1
      ENDIF
   ENDDO  ! time loop
+  !$OMP END PARALLEL DO
 
   ierr = closeout(ncout)
 
