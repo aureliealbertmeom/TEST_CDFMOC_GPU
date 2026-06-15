@@ -49,4 +49,4 @@ cdfspice without writing data and 1 time-step only :
 |----------|---------------|-------------|-----------|---|
 | eORCA05 | 10 sec | 10 sec | | 27 sec |
 | eORCA025 | 227 sec | 148 sec | | 572 sec |
-| eNATL60 | |  |  | |
+| eNATL60 | 412 sec | 406 sec | 388 sec | 900 sec |
